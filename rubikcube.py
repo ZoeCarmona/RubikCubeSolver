@@ -1,5 +1,7 @@
 import shutil
 import copy
+import tqdm  # For progress bar
+from collections import deque
 
 # Print Rubik's Cube in the cross layout format
 def print_rubik_cube(cube):
@@ -307,40 +309,50 @@ def cubes_equal(cube1, cube2):
                     return False
     return True
 
-# Function to perform IDA* Search (DFS + Iterative Deepening A*)
+# Convert cube state to a hashable tuple
+def cube_to_tuple(cube):
+    return tuple(tuple(row) for face in cube.values() for row in face)
+
+# IDA* Search with Iterative DFS and Progress Bar
 def ida_star(cube, goal_cube):
-    def dfs(cube, depth, g, path, visited):
-        # Base case: if the cube is solved, return the path
+    def dfs(cube, depth, g, limit, path, visited):
+        if cube_to_tuple(cube) in visited:
+            return None  # Prune duplicate states
+        
+        visited.add(cube_to_tuple(cube))
+
         if cubes_equal(cube, goal_cube):
             return path
-        
-        # If we exceed the maximum depth, return None (we'll prune)
-        if depth + g > limit:
-            return None
 
-        # Iterate through all possible moves (rotate faces)
+        f = g + manhattan_distance(cube, goal_cube)
+        if f > limit:
+            return f
+
+        min_next_limit = float('inf')
         for move in possible_moves():
             new_cube = make_move(copy.deepcopy(cube), move)
-            new_cube_str = str(new_cube)
-            if new_cube_str not in visited:  # Convert cube to string to make it hashable
-                visited.add(new_cube_str)
-                path.append(move)
-                result = dfs(new_cube, depth + 1, g + 1, path, visited)
-                if result is not None:
-                    return result
-                path.pop()
+            path.append(move)
+            result = dfs(new_cube, depth + 1, g + 1, limit, path, visited)
+            if isinstance(result, list):
+                return result
+            if isinstance(result, int):
+                min_next_limit = min(min_next_limit, result)
+            path.pop()
 
-        return None
+        return min_next_limit
 
     limit = manhattan_distance(cube, goal_cube)
-    while True:
-        visited = set()
-        visited.add(str(cube))  # Store the initial cube state as a visited state
-        path = []
-        result = dfs(cube, 0, 0, path, visited)
-        if result is not None:
-            return result
-        limit += 1  # Increment the depth limit if no solution is found
+    with tqdm.tqdm(total=100, desc="Solving", unit="%") as progress:
+        while True:
+            visited = set()
+            path = []
+            result = dfs(cube, 0, 0, limit, path, visited)
+            progress.update(5)  # Update progress (estimated 20 iterations max)
+            if isinstance(result, list):
+                return result
+            if result == float('inf'):
+                return None
+            limit = result
 
 # Utility function for cube moves and configurations
 def make_move(cube, move):
