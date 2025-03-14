@@ -1,5 +1,7 @@
 import shutil
 import copy
+import tqdm  # For progress bar
+from collections import deque
 
 # Print Rubik's Cube in the cross layout format
 def print_rubik_cube(cube):
@@ -88,35 +90,53 @@ def move_F(cube):
     # Rotate the front face clockwise
     cube["front"] = rotate_face_clockwise(cube["front"])
     
-    # Update adjacent faces
-    top_row = cube["Up"][2]
-    left_col = [cube["left"][i][2] for i in range(3)]
-    bottom_row = cube["Down"][0]
-    right_col = [cube["right"][i][0] for i in range(3)]
+    # Save the affected rows/columns
+    top_row = cube["Up"][2].copy()  # Copy the top row of the Up face
+    left_col = [cube["left"][i][2] for i in range(3)]  # Copy the right column of the Left face
+    bottom_row = cube["Down"][0].copy()  # Copy the bottom row of the Down face
+    right_col = [cube["right"][i][0] for i in range(3)]  # Copy the left column of the Right face
     
-    # Move the edge pieces from Up, left, Down, and right
+    # Update the Up face
     for i in range(3):
-        cube["Up"][2][i] = left_col[2 - i]
-        cube["left"][i][2] = bottom_row[i]
-        cube["Down"][0][i] = right_col[2 - i]
-        cube["right"][i][0] = top_row[i]
+        cube["Up"][2][i] = left_col[2 - i]  # Left column becomes the top row (reversed)
+    
+    # Update the Right face
+    for i in range(3):
+        cube["right"][i][0] = top_row[i]  # Top row becomes the right column
+    
+    # Update the Down face
+    for i in range(3):
+        cube["Down"][0][i] = right_col[2 - i]  # Right column becomes the bottom row (reversed)
+    
+    # Update the Left face
+    for i in range(3):
+        cube["left"][i][2] = bottom_row[i]  # Bottom row becomes the left column
 
 def move_F_prime(cube):
     # Rotate the front face counterclockwise
     cube["front"] = rotate_face_counterclockwise(cube["front"])
     
-    # Update adjacent faces
-    top_row = cube["Up"][2]
-    left_col = [cube["left"][i][2] for i in range(3)]
-    bottom_row = cube["Down"][0]
-    right_col = [cube["right"][i][0] for i in range(3)]
+    # Save the affected rows/columns
+    top_row = cube["Up"][2].copy()  # Copy the top row of the Up face
+    left_col = [cube["left"][i][2] for i in range(3)]  # Copy the right column of the Left face
+    bottom_row = cube["Down"][0].copy()  # Copy the bottom row of the Down face
+    right_col = [cube["right"][i][0] for i in range(3)]  # Copy the left column of the Right face
     
-    # Move the edge pieces from Up, left, Down, and right
+    # Update the Up face
     for i in range(3):
-        cube["Up"][2][i] = right_col[i]
-        cube["left"][i][2] = top_row[2 - i]
-        cube["Down"][0][i] = left_col[i]
-        cube["right"][i][0] = bottom_row[2 - i]
+        cube["Up"][2][i] = right_col[i]  # Right column becomes the top row
+    
+    # Update the Left face
+    for i in range(3):
+        cube["left"][i][2] = top_row[2 - i]  # Top row becomes the left column (reversed)
+    
+    # Update the Down face
+    for i in range(3):
+        cube["Down"][0][i] = left_col[i]  # Left column becomes the bottom row
+    
+    # Update the Right face
+    for i in range(3):
+        cube["right"][i][0] = bottom_row[2 - i]  # Bottom row becomes the right column (reversed)
 
 def move_R(cube):
     # Rotate the right face clockwise
@@ -295,8 +315,10 @@ def manhattan_distance(cube, goal_cube):
         for row in range(3):
             for col in range(3):
                 if cube[face][row][col] != goal_cube[face][row][col]:
+                    # Calculate the distance based on the position of the mismatched tile
+                    # For simplicity, we'll use a basic count, but you can implement a more accurate heuristic
                     distance += 1
-    return distance // 8  # Divide by 8 to approximate the number of moves
+    return distance
 
 # Function to compare two cube states
 def cubes_equal(cube1, cube2):
@@ -307,40 +329,50 @@ def cubes_equal(cube1, cube2):
                     return False
     return True
 
-# Function to perform IDA* Search (DFS + Iterative Deepening A*)
+# Convert cube state to a hashable tuple
+def cube_to_tuple(cube):
+    return tuple(tuple(row) for face in cube.values() for row in face)
+
+# IDA* Search with Iterative DFS and Progress Bar
 def ida_star(cube, goal_cube):
-    def dfs(cube, depth, g, path, visited):
-        # Base case: if the cube is solved, return the path
+    def dfs(cube, depth, g, limit, path, visited):
+        if cube_to_tuple(cube) in visited:
+            return None  # Prune duplicate states
+        
+        visited.add(cube_to_tuple(cube))
+
         if cubes_equal(cube, goal_cube):
             return path
-        
-        # If we exceed the maximum depth, return None (we'll prune)
-        if depth + g > limit:
-            return None
 
-        # Iterate through all possible moves (rotate faces)
+        f = g + manhattan_distance(cube, goal_cube)
+        if f > limit:
+            return f
+
+        min_next_limit = float('inf')
         for move in possible_moves():
             new_cube = make_move(copy.deepcopy(cube), move)
-            new_cube_str = str(new_cube)
-            if new_cube_str not in visited:  # Convert cube to string to make it hashable
-                visited.add(new_cube_str)
-                path.append(move)
-                result = dfs(new_cube, depth + 1, g + 1, path, visited)
-                if result is not None:
-                    return result
-                path.pop()
+            path.append(move)
+            result = dfs(new_cube, depth + 1, g + 1, limit, path, visited)
+            if isinstance(result, list):
+                return result
+            if isinstance(result, int):
+                min_next_limit = min(min_next_limit, result)
+            path.pop()
 
-        return None
+        return min_next_limit
 
     limit = manhattan_distance(cube, goal_cube)
-    while True:
-        visited = set()
-        visited.add(str(cube))  # Store the initial cube state as a visited state
-        path = []
-        result = dfs(cube, 0, 0, path, visited)
-        if result is not None:
-            return result
-        limit += 1  # Increment the depth limit if no solution is found
+    with tqdm.tqdm(total=100, desc="Solving", unit="%") as progress:
+        while True:
+            visited = set()
+            path = []
+            result = dfs(cube, 0, 0, limit, path, visited)
+            progress.update(5)  # Update progress (estimated 20 iterations max)
+            if isinstance(result, list):
+                return result
+            if result == float('inf'):
+                return None
+            limit = result
 
 # Utility function for cube moves and configurations
 def make_move(cube, move):
