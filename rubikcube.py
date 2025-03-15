@@ -210,35 +210,53 @@ def move_B(cube):
     # Rotate the back face clockwise
     cube["back"] = rotate_face_clockwise(cube["back"])
     
-    # Update adjacent faces
-    top_row = cube["Up"][0]
-    right_col = [cube["right"][i][2] for i in range(3)]
-    bottom_row = cube["Down"][2]
-    left_col = [cube["left"][i][0] for i in range(3)]
+    # Save the affected rows/columns
+    top_row = cube["Up"][0].copy()  # Copy the top row of the Up face
+    right_col = [cube["right"][i][2] for i in range(3)]  # Copy the right column of the Right face
+    bottom_row = cube["Down"][2].copy()  # Copy the bottom row of the Down face
+    left_col = [cube["left"][i][0] for i in range(3)]  # Copy the left column of the Left face
     
-    # Move the edge pieces from Up, right, Down, and left
+    # Update the Up face
     for i in range(3):
-        cube["Up"][0][i] = left_col[i]
-        cube["right"][i][2] = top_row[2 - i]
-        cube["Down"][2][i] = right_col[i]
-        cube["left"][i][0] = bottom_row[2 - i]
+        cube["Up"][0][i] = right_col[i]  # Right column becomes the top row
+    
+    # Update the Left face
+    for i in range(3):
+        cube["left"][i][0] = top_row[2 - i]  # Top row becomes the left column (reversed)
+    
+    # Update the Down face
+    for i in range(3):
+        cube["Down"][2][i] = left_col[i]  # Left column becomes the bottom row
+    
+    # Update the Right face
+    for i in range(3):
+        cube["right"][i][2] = bottom_row[2 - i]  # Bottom row becomes the right column (reversed)
 
 def move_B_prime(cube):
     # Rotate the back face counterclockwise
     cube["back"] = rotate_face_counterclockwise(cube["back"])
     
-    # Update adjacent faces
-    top_row = cube["Up"][0]
-    right_col = [cube["right"][i][2] for i in range(3)]
-    bottom_row = cube["Down"][2]
-    left_col = [cube["left"][i][0] for i in range(3)]
+    # Save the affected rows/columns
+    top_row = cube["Up"][0].copy()  # Copy the top row of the Up face
+    right_col = [cube["right"][i][2] for i in range(3)]  # Copy the right column of the Right face
+    bottom_row = cube["Down"][2].copy()  # Copy the bottom row of the Down face
+    left_col = [cube["left"][i][0] for i in range(3)]  # Copy the left column of the Left face
     
-    # Move the edge pieces from Up, right, Down, and left
+    # Update the Up face
     for i in range(3):
-        cube["Up"][0][i] = right_col[2 - i]
-        cube["right"][i][2] = bottom_row[i]
-        cube["Down"][2][i] = left_col[2 - i]
-        cube["left"][i][0] = top_row[i]
+        cube["Up"][0][i] = left_col[2 - i]  # Left column becomes the top row (reversed)
+    
+    # Update the Right face
+    for i in range(3):
+        cube["right"][i][2] = top_row[i]  # Top row becomes the right column
+    
+    # Update the Down face
+    for i in range(3):
+        cube["Down"][2][i] = right_col[2 - i]  # Right column becomes the bottom row (reversed)
+    
+    # Update the Left face
+    for i in range(3):
+        cube["left"][i][0] = bottom_row[i]  # Bottom row becomes the left column
 
 def move_U(cube):
     # Rotate the Up face clockwise
