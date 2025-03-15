@@ -2,6 +2,7 @@ import shutil
 import copy
 import tqdm  # For progress bar
 from collections import deque
+import time
 
 # Print Rubik's Cube in the cross layout format
 def print_rubik_cube(cube):
@@ -353,6 +354,7 @@ def cube_to_tuple(cube):
 
 # IDA* Search with Iterative DFS and Progress Bar
 def ida_star(cube, goal_cube):
+    start_time = time.time()
     def dfs(cube, depth, g, limit, path, visited):
         if cube_to_tuple(cube) in visited:
             return None  # Prune duplicate states
@@ -380,13 +382,15 @@ def ida_star(cube, goal_cube):
         return min_next_limit
 
     limit = manhattan_distance(cube, goal_cube)
-    with tqdm.tqdm(total=100, desc="Solving", unit="%") as progress:
-        while True:
+    print(f"\nSolving, please wait ...")
+    while True:
             visited = set()
             path = []
             result = dfs(cube, 0, 0, limit, path, visited)
-            progress.update(5)  # Update progress (estimated 20 iterations max)
+            elapsed_time = time.time() - start_time
+            # print(f"\nSolving in less than {int(elapsed_time)} seconds...")
             if isinstance(result, list):
+                print(f"\nResult found in {int(elapsed_time)} seconds!")
                 return result
             if result == float('inf'):
                 return None
@@ -426,7 +430,6 @@ solution = ida_star(rubik_cube, goal_cube)
 
 if solution:
     # Output the solution path in the desired format (e.g., a space-separated string of moves)
-    print("Solution found:")
     print(" ".join(solution))
 else:
     print("No solution found")
