@@ -1,8 +1,7 @@
 import shutil
 import copy
-import tqdm  # For progress bar
-from collections import deque
 import time
+from collections import deque
 
 # Print Rubik's Cube in the cross layout format
 def print_rubik_cube(cube):
@@ -88,56 +87,30 @@ def rotate_face_counterclockwise(face):
     return [list(row) for row in zip(*face)][::-1]
 
 def move_F(cube):
-    # Rotate the front face clockwise
     cube["front"] = rotate_face_clockwise(cube["front"])
+    top_row = cube["Up"][2].copy()
+    left_col = [cube["left"][i][2] for i in range(3)]
+    bottom_row = cube["Down"][0].copy()
+    right_col = [cube["right"][i][0] for i in range(3)]
     
-    # Save the affected rows/columns
-    top_row = cube["Up"][2].copy()  # Copy the top row of the Up face
-    left_col = [cube["left"][i][2] for i in range(3)]  # Copy the right column of the Left face
-    bottom_row = cube["Down"][0].copy()  # Copy the bottom row of the Down face
-    right_col = [cube["right"][i][0] for i in range(3)]  # Copy the left column of the Right face
-    
-    # Update the Up face
     for i in range(3):
-        cube["Up"][2][i] = left_col[2 - i]  # Left column becomes the top row (reversed)
-    
-    # Update the Right face
-    for i in range(3):
-        cube["right"][i][0] = top_row[i]  # Top row becomes the right column
-    
-    # Update the Down face
-    for i in range(3):
-        cube["Down"][0][i] = right_col[2 - i]  # Right column becomes the bottom row (reversed)
-    
-    # Update the Left face
-    for i in range(3):
-        cube["left"][i][2] = bottom_row[i]  # Bottom row becomes the left column
+        cube["Up"][2][i] = left_col[2 - i]
+        cube["right"][i][0] = top_row[i]
+        cube["Down"][0][i] = right_col[2 - i]
+        cube["left"][i][2] = bottom_row[i]
 
 def move_F_prime(cube):
-    # Rotate the front face counterclockwise
     cube["front"] = rotate_face_counterclockwise(cube["front"])
+    top_row = cube["Up"][2].copy()
+    left_col = [cube["left"][i][2] for i in range(3)]
+    bottom_row = cube["Down"][0].copy()
+    right_col = [cube["right"][i][0] for i in range(3)]
     
-    # Save the affected rows/columns
-    top_row = cube["Up"][2].copy()  # Copy the top row of the Up face
-    left_col = [cube["left"][i][2] for i in range(3)]  # Copy the right column of the Left face
-    bottom_row = cube["Down"][0].copy()  # Copy the bottom row of the Down face
-    right_col = [cube["right"][i][0] for i in range(3)]  # Copy the left column of the Right face
-    
-    # Update the Up face
     for i in range(3):
-        cube["Up"][2][i] = right_col[i]  # Right column becomes the top row
-    
-    # Update the Left face
-    for i in range(3):
-        cube["left"][i][2] = top_row[2 - i]  # Top row becomes the left column (reversed)
-    
-    # Update the Down face
-    for i in range(3):
-        cube["Down"][0][i] = left_col[i]  # Left column becomes the bottom row
-    
-    # Update the Right face
-    for i in range(3):
-        cube["right"][i][0] = bottom_row[2 - i]  # Bottom row becomes the right column (reversed)
+        cube["Up"][2][i] = right_col[i]
+        cube["left"][i][2] = top_row[2 - i]
+        cube["Down"][0][i] = left_col[i]
+        cube["right"][i][0] = bottom_row[2 - i]
 
 def move_R(cube):
     # Rotate the right face clockwise
@@ -353,9 +326,12 @@ def cube_to_tuple(cube):
     return tuple(tuple(row) for face in cube.values() for row in face)
 
 # IDA* Search with Iterative DFS and Progress Bar
-def ida_star(cube, goal_cube):
+def ida_star(cube, goal_cube, heuristic, max_depth=20):
     start_time = time.time()
     def dfs(cube, depth, g, limit, path, visited):
+        if depth > max_depth:
+            return float('inf')  # Stop if depth exceeds max_depth
+        
         if cube_to_tuple(cube) in visited:
             return None  # Prune duplicate states
         
@@ -364,7 +340,7 @@ def ida_star(cube, goal_cube):
         if cubes_equal(cube, goal_cube):
             return path
 
-        f = g + manhattan_distance(cube, goal_cube)
+        f = g + heuristic(cube)
         if f > limit:
             return f
 
@@ -381,20 +357,20 @@ def ida_star(cube, goal_cube):
 
         return min_next_limit
 
-    limit = manhattan_distance(cube, goal_cube)
+    limit = heuristic(cube)
     print(f"\nSolving, please wait ...")
     while True:
-            visited = set()
-            path = []
-            result = dfs(cube, 0, 0, limit, path, visited)
-            elapsed_time = time.time() - start_time
-            # print(f"\nSolving in less than {int(elapsed_time)} seconds...")
-            if isinstance(result, list):
-                print(f"\nResult found in {int(elapsed_time)} seconds!")
-                return result
-            if result == float('inf'):
-                return None
-            limit = result
+        visited = set()
+        path = []
+        result = dfs(cube, 0, 0, limit, path, visited)
+        elapsed_time = time.time() - start_time
+        if isinstance(result, list):
+            print(f"\nResult found in {int(elapsed_time)} seconds!")
+            return result
+        if result == float('inf'):
+            print("No solution found within depth limit.")
+            return None
+        limit = result
 
 # Utility function for cube moves and configurations
 def make_move(cube, move):
@@ -425,11 +401,159 @@ def make_move(cube, move):
         move_D_prime(new_cube)
     return new_cube
 
-# Run IDA* to find the solution path
-solution = ida_star(rubik_cube, goal_cube)
+# Helper functions for Phase 1 heuristic
+def get_edges(cube):
+    edges = []
+    edges.append((cube["Up"][1][0], cube["left"][0][1]))  # Up-Left edge
+    edges.append((cube["Up"][0][1], cube["back"][0][1]))  # Up-Back edge
+    edges.append((cube["Up"][1][2], cube["right"][0][1])) # Up-Right edge
+    edges.append((cube["Up"][2][1], cube["front"][0][1])) # Up-Front edge
+    
+    edges.append((cube["Down"][1][0], cube["left"][2][1])) # Down-Left edge
+    edges.append((cube["Down"][0][1], cube["back"][2][1])) # Down-Back edge
+    edges.append((cube["Down"][1][2], cube["right"][2][1])) # Down-Right edge
+    edges.append((cube["Down"][2][1], cube["front"][2][1])) # Down-Front edge
+    
+    edges.append((cube["front"][1][0], cube["left"][1][2])) # Front-Left edge
+    edges.append((cube["front"][1][2], cube["right"][1][0])) # Front-Right edge
+    edges.append((cube["back"][1][0], cube["right"][1][2]))  # Back-Right edge
+    edges.append((cube["back"][1][2], cube["left"][1][0]))  # Back-Left edge
+    
+    return edges
+
+def is_edge_oriented_correctly(edge):
+    solved_edges = [
+        ("W", "O"), ("W", "B"), ("W", "R"), ("W", "G"),  # Up edges
+        ("Y", "O"), ("Y", "B"), ("Y", "R"), ("Y", "G"),  # Down edges
+        ("G", "O"), ("G", "R"), ("B", "R"), ("B", "O")   # Middle edges
+    ]
+    return edge in solved_edges or edge[::-1] in solved_edges
+
+def get_corners(cube):
+    corners = []
+    corners.append((cube["Up"][0][0], cube["left"][0][0], cube["back"][0][2]))  # Up-Left-Back corner
+    corners.append((cube["Up"][0][2], cube["right"][0][2], cube["back"][0][0])) # Up-Right-Back corner
+    corners.append((cube["Up"][2][0], cube["left"][0][2], cube["front"][0][0])) # Up-Left-Front corner
+    corners.append((cube["Up"][2][2], cube["right"][0][0], cube["front"][0][2])) # Up-Right-Front corner
+    
+    corners.append((cube["Down"][0][0], cube["left"][2][2], cube["back"][2][2])) # Down-Left-Back corner
+    corners.append((cube["Down"][0][2], cube["right"][2][2], cube["back"][2][0])) # Down-Right-Back corner
+    corners.append((cube["Down"][2][0], cube["left"][2][0], cube["front"][2][0])) # Down-Left-Front corner
+    corners.append((cube["Down"][2][2], cube["right"][2][0], cube["front"][2][2])) # Down-Right-Front corner
+    
+    return corners
+
+def is_corner_in_correct_slice(corner):
+    solved_corners = [
+        ("W", "O", "B"), ("W", "B", "R"), ("W", "R", "G"), ("W", "G", "O"),  # Up corners
+        ("Y", "O", "G"), ("Y", "G", "R"), ("Y", "R", "B"), ("Y", "B", "O")   # Down corners
+    ]
+    # Check all rotations of the corner
+    return (corner in solved_corners or
+            (corner[1], corner[2], corner[0]) in solved_corners or
+            (corner[2], corner[0], corner[1]) in solved_corners)
+
+# Helper function to check if an edge is solved
+def is_edge_solved(edge):
+    solved_edges = [
+        ("W", "O"), ("W", "B"), ("W", "R"), ("W", "G"),  # Up edges
+        ("Y", "O"), ("Y", "B"), ("Y", "R"), ("Y", "G"),  # Down edges
+        ("G", "O"), ("G", "R"), ("B", "R"), ("B", "O")   # Middle edges
+    ]
+    return edge in solved_edges or edge[::-1] in solved_edges
+
+# Helper function to check if a corner is solved
+def is_corner_solved(corner):
+    solved_corners = [
+        # Up corners (all rotations)
+        ("W", "O", "B"), ("W", "B", "O"), ("O", "W", "B"), ("O", "B", "W"), ("B", "W", "O"), ("B", "O", "W"),
+        ("W", "B", "R"), ("W", "R", "B"), ("B", "W", "R"), ("B", "R", "W"), ("R", "W", "B"), ("R", "B", "W"),
+        ("W", "R", "G"), ("W", "G", "R"), ("R", "W", "G"), ("R", "G", "W"), ("G", "W", "R"), ("G", "R", "W"),
+        ("W", "G", "O"), ("W", "O", "G"), ("G", "W", "O"), ("G", "O", "W"), ("O", "W", "G"), ("O", "G", "W"),
+        
+        # Down corners (all rotations)
+        ("Y", "O", "G"), ("Y", "G", "O"), ("O", "Y", "G"), ("O", "G", "Y"), ("G", "Y", "O"), ("G", "O", "Y"),
+        ("Y", "G", "R"), ("Y", "R", "G"), ("G", "Y", "R"), ("G", "R", "Y"), ("R", "Y", "G"), ("R", "G", "Y"),
+        ("Y", "R", "B"), ("Y", "B", "R"), ("R", "Y", "B"), ("R", "B", "Y"), ("B", "Y", "R"), ("B", "R", "Y"),
+        ("Y", "B", "O"), ("Y", "O", "B"), ("B", "Y", "O"), ("B", "O", "Y"), ("O", "Y", "B"), ("O", "B", "Y")
+    ]
+    return corner in solved_corners
+
+def phase1_heuristic(cube):
+    edge_orientation_cost = 0
+    print("Checking edges:")
+    for edge in get_edges(cube):
+        print("Edge:", edge, "Solved:", is_edge_oriented_correctly(edge))
+        if not is_edge_oriented_correctly(edge):
+            edge_orientation_cost += 1
+    
+    corner_grouping_cost = 0
+    print("Checking corners:")
+    for corner in get_corners(cube):
+        print("Corner:", corner, "Solved:", is_corner_in_correct_slice(corner))
+        if not is_corner_in_correct_slice(corner):
+            corner_grouping_cost += 1
+    
+    print("Phase 1 Heuristic Value:", edge_orientation_cost + corner_grouping_cost)
+    return edge_orientation_cost + corner_grouping_cost
+
+def phase2_heuristic(cube):
+    unsolved_edges = 0
+    unsolved_corners = 0
+    
+    # Check edges
+    print("Checking edges:")
+    for edge in get_edges(cube):
+        print("Edge:", edge, "Solved:", is_edge_solved(edge))
+        if not is_edge_solved(edge):
+            unsolved_edges += 1
+    
+    # Check corners
+    print("Checking corners:")
+    for corner in get_corners(cube):
+        print("Corner:", corner, "Solved:", is_corner_solved(corner))
+        if not is_corner_solved(corner):
+            unsolved_corners += 1
+    
+    print("Phase 2 Heuristic Value:", unsolved_edges + unsolved_corners)
+    return unsolved_edges + unsolved_corners
+
+def two_phase_ida_star(cube, goal_cube):
+    # Phase 1: Reduce the cube to a reduced state
+    print("Starting Phase 1...")
+    phase1_solution = ida_star(cube, goal_cube, phase1_heuristic)
+    if not phase1_solution:
+        print("No solution found in Phase 1.")
+        return None
+    
+    # Apply Phase 1 solution to the cube
+    for move in phase1_solution:
+        cube = make_move(cube, move)
+    
+    # Print the reduced state
+    print("Reduced State after Phase 1:")
+    print_rubik_cube(cube)
+    
+    # Check if the cube is already solved after Phase 1
+    if cubes_equal(cube, goal_cube):
+        print("Cube is already solved after Phase 1! Returning solution.")
+        return phase1_solution
+    
+    # Phase 2: Solve the cube from the reduced state
+    print("Starting Phase 2...")
+    print("Is the cube already solved?", cubes_equal(cube, goal_cube))
+    phase2_solution = ida_star(cube, goal_cube, phase2_heuristic)
+    if not phase2_solution:
+        print("No solution found in Phase 2.")
+        return None
+    
+    # Combine both solutions
+    return phase1_solution + phase2_solution
+
+# Run the Two-Phase IDA* algorithm
+solution = two_phase_ida_star(rubik_cube, goal_cube)
 
 if solution:
-    # Output the solution path in the desired format (e.g., a space-separated string of moves)
-    print(" ".join(solution))
+    print("Solution:", " ".join(solution))
 else:
-    print("No solution found")
+    print("No solution found.")
